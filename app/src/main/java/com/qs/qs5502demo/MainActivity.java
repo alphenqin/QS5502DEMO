@@ -32,7 +32,7 @@ public class MainActivity extends Activity{
 			@Override
 			public void onClick(View arg0) {
 				// TODO Auto-generated method stub
-				//Ä£Äâ´¥·¢É¨Ãè°´¼ü£¬·¢³ö¹ã²¥£¬¿ªÊ¼É¨Ãè
+				//æ¨¡æ‹Ÿè§¦å‘æ‰«ææŒ‰é”®ï¼Œå‘å‡ºå¹¿æ’­ï¼Œå¼€å§‹æ‰«æ
 				Intent intentBroadcast = new Intent();
 				intentBroadcast.setAction("hbyapi.intent.key_scan_down");
 				sendBroadcast(intentBroadcast);
@@ -51,9 +51,9 @@ public class MainActivity extends Activity{
 		@Override
 		public void onReceive(Context context, Intent intent) {
 			// TODO Auto-generated method stub
-		// »ñÈ¡É¨ÃèÊı¾İ
+		// è·å–æ‰«ææ•°æ®
 		String text1 = intent.getExtras().getString("data");
-		// °ÑÉ¨ÃèĞÅÏ¢setµ½±à¼­¿ò
+		// æŠŠæ‰«æä¿¡æ¯setåˆ°ç¼–è¾‘æ¡†
 		edText.setText(text1);
 		}
 	}
@@ -61,7 +61,7 @@ public class MainActivity extends Activity{
 	@Override
 	protected void onDestroy() {
 		// TODO Auto-generated method stub
-		//ÍË³öÊ±ºò×¢Ïú¹ã²¥½ÓÊÕÆ÷
+		//é€€å‡ºæ—¶å€™æ³¨é”€å¹¿æ’­æ¥æ”¶å™¨
 		unregisterReceiver(scanBroadcastReceiver);
 		super.onDestroy();
 	}
