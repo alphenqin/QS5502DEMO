@@ -12,12 +12,9 @@ import android.widget.Toast;
 
 import com.qs.pda5502demo.R;
 import com.qs.qs5502demo.api.AgvApiService;
-import com.qs.qs5502demo.model.TaskResponse;
+import com.qs.qs5502demo.model.AgvResponse;
 import com.qs.qs5502demo.model.Valve;
-import com.qs.qs5502demo.util.PreferenceUtil;
-
-import java.util.HashMap;
-import java.util.Map;
+import com.qs.qs5502demo.util.DateUtil;
 
 public class SendInspectionActivity extends Activity {
     
@@ -136,27 +133,24 @@ public class SendInspectionActivity extends Activity {
             @Override
             public void run() {
                 try {
-                    // 构建请求参数
-                    Map<String, String> params = new HashMap<>();
-                    params.put("palletNo", palletNo);
-                    params.put("binCode", binCode);
-                    params.put("matCode", matCode);
-                    params.put("inspectionStation", inspectionStation);
-                    params.put("operator", PreferenceUtil.getUserName(SendInspectionActivity.this));
+                    // 生成任务编号
+                    String outID = DateUtil.generateTaskNo("S");
                     
                     // 调用AGV接口创建送检任务
-                    TaskResponse response = agvApiService.callSendInspection(params, SendInspectionActivity.this);
+                    AgvResponse response = agvApiService.callSendInspection(
+                        binCode, inspectionStation, matCode, outID, SendInspectionActivity.this);
                     
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            if (response != null && response.getOutID() != null) {
+                            if (response != null && response.isSuccess()) {
                                 updateStatus(true);
                                 Toast.makeText(SendInspectionActivity.this, 
-                                    "呼叫送检成功，任务号：" + response.getOutID(), 
+                                    "呼叫送检成功，任务号：" + outID, 
                                     Toast.LENGTH_LONG).show();
                             } else {
-                                Toast.makeText(SendInspectionActivity.this, "呼叫送检失败", Toast.LENGTH_SHORT).show();
+                                String msg = response != null ? response.getMessage() : "呼叫送检失败";
+                                Toast.makeText(SendInspectionActivity.this, msg, Toast.LENGTH_SHORT).show();
                             }
                         }
                     });
@@ -205,25 +199,23 @@ public class SendInspectionActivity extends Activity {
             @Override
             public void run() {
                 try {
-                    // 构建请求参数
-                    Map<String, String> params = new HashMap<>();
-                    params.put("palletNo", palletNo);
-                    params.put("binCode", binCode);
-                    params.put("inspectionStation", inspectionStation);
-                    params.put("operator", PreferenceUtil.getUserName(SendInspectionActivity.this));
+                    // 生成任务编号
+                    String outID = DateUtil.generateTaskNo("H");
                     
                     // 调用AGV接口创建空托回库任务
-                    TaskResponse response = agvApiService.returnPalletFromInspection(params, SendInspectionActivity.this);
+                    AgvResponse response = agvApiService.returnPalletFromInspection(
+                        inspectionStation, binCode, outID, SendInspectionActivity.this);
                     
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            if (response != null && response.getOutID() != null) {
+                            if (response != null && response.isSuccess()) {
                                 Toast.makeText(SendInspectionActivity.this, 
-                                    "空托回库成功，任务号：" + response.getOutID(), 
+                                    "空托回库成功，任务号：" + outID, 
                                     Toast.LENGTH_LONG).show();
                             } else {
-                                Toast.makeText(SendInspectionActivity.this, "空托回库失败", Toast.LENGTH_SHORT).show();
+                                String msg = response != null ? response.getMessage() : "空托回库失败";
+                                Toast.makeText(SendInspectionActivity.this, msg, Toast.LENGTH_SHORT).show();
                             }
                         }
                     });

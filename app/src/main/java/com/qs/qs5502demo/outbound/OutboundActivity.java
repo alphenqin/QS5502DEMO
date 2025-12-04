@@ -12,13 +12,10 @@ import android.widget.Toast;
 
 import com.qs.pda5502demo.R;
 import com.qs.qs5502demo.api.AgvApiService;
-import com.qs.qs5502demo.model.TaskResponse;
+import com.qs.qs5502demo.model.AgvResponse;
 import com.qs.qs5502demo.model.Valve;
 import com.qs.qs5502demo.send.SelectValveActivity;
-import com.qs.qs5502demo.util.PreferenceUtil;
-
-import java.util.HashMap;
-import java.util.Map;
+import com.qs.qs5502demo.util.DateUtil;
 
 public class OutboundActivity extends Activity {
     
@@ -137,27 +134,24 @@ public class OutboundActivity extends Activity {
             @Override
             public void run() {
                 try {
-                    // 构建请求参数
-                    Map<String, String> params = new HashMap<>();
-                    params.put("palletNo", palletNo);
-                    params.put("binCode", binCode);
-                    params.put("matCode", matCode);
-                    params.put("swapStation", swapStation);
-                    params.put("operator", PreferenceUtil.getUserName(OutboundActivity.this));
+                    // 生成任务编号
+                    String outID = DateUtil.generateTaskNo("C");
                     
                     // 调用AGV接口创建出库任务
-                    TaskResponse response = agvApiService.callOutbound(params, OutboundActivity.this);
+                    AgvResponse response = agvApiService.callOutbound(
+                        binCode, swapStation, matCode, outID, OutboundActivity.this);
                     
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            if (response != null && response.getOutID() != null) {
+                            if (response != null && response.isSuccess()) {
                                 updateStatus(true);
                                 Toast.makeText(OutboundActivity.this, 
-                                    "呼叫出库成功，任务号：" + response.getOutID(), 
+                                    "呼叫出库成功，任务号：" + outID, 
                                     Toast.LENGTH_LONG).show();
                             } else {
-                                Toast.makeText(OutboundActivity.this, "呼叫出库失败", Toast.LENGTH_SHORT).show();
+                                String msg = response != null ? response.getMessage() : "呼叫出库失败";
+                                Toast.makeText(OutboundActivity.this, msg, Toast.LENGTH_SHORT).show();
                             }
                         }
                     });
@@ -206,25 +200,23 @@ public class OutboundActivity extends Activity {
             @Override
             public void run() {
                 try {
-                    // 构建请求参数
-                    Map<String, String> params = new HashMap<>();
-                    params.put("palletNo", palletNo);
-                    params.put("binCode", binCode);
-                    params.put("swapStation", swapStation);
-                    params.put("operator", PreferenceUtil.getUserName(OutboundActivity.this));
+                    // 生成任务编号
+                    String outID = DateUtil.generateTaskNo("H");
                     
                     // 调用AGV接口创建空托回库任务
-                    TaskResponse response = agvApiService.returnPalletFromSwap(params, OutboundActivity.this);
+                    AgvResponse response = agvApiService.returnPalletFromSwap(
+                        swapStation, binCode, outID, OutboundActivity.this);
                     
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            if (response != null && response.getOutID() != null) {
+                            if (response != null && response.isSuccess()) {
                                 Toast.makeText(OutboundActivity.this, 
-                                    "空托回库成功，任务号：" + response.getOutID(), 
+                                    "空托回库成功，任务号：" + outID, 
                                     Toast.LENGTH_LONG).show();
                             } else {
-                                Toast.makeText(OutboundActivity.this, "空托回库失败", Toast.LENGTH_SHORT).show();
+                                String msg = response != null ? response.getMessage() : "空托回库失败";
+                                Toast.makeText(OutboundActivity.this, msg, Toast.LENGTH_SHORT).show();
                             }
                         }
                     });

@@ -19,11 +19,10 @@
         android:testOnly="true"
         android:theme="@style/AppTheme" >
 
-        <!-- 主界面 -->
+        <!-- 登录界面 -->
         <activity
-            android:name="com.qs.qs5502demo.MainActivity"
-            android:label="@string/app_name"
-            android:launchMode="singleTask"
+            android:name="com.qs.qs5502demo.LoginActivity"
+            android:label="登录"
             android:screenOrientation="portrait"
             android:windowSoftInputMode="stateAlwaysHidden" >
             <intent-filter>
@@ -32,6 +31,14 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- 主界面 -->
+        <activity
+            android:name="com.qs.qs5502demo.MainActivity"
+            android:label="@string/app_name"
+            android:launchMode="singleTask"
+            android:screenOrientation="portrait"
+            android:windowSoftInputMode="stateAlwaysHidden" />
 
         <!-- 入库模块 -->
         <activity

@@ -9,10 +9,14 @@
 public static final String WMS_BASE_URL = "http://wms-server.example.com/api";
 
 // AGV调度系统接口基础地址
-public static final String AGV_BASE_URL = "http://agv-dispatch.example.com/api";
+public static final String AGV_BASE_URL = "http://192.168.1.20:81/pt";
 ```
 
-**请根据实际部署环境修改以上地址。**
+**当前配置**：
+- WMS地址：需要根据实际部署环境修改
+- AGV地址：已配置为 `http://192.168.1.20:81/pt`
+
+**请根据实际部署环境修改 WMS 地址。**
 
 ## 2. 已实现的接口
 
@@ -24,14 +28,16 @@ public static final String AGV_BASE_URL = "http://agv-dispatch.example.com/api";
 - ✅ 任务记录查询接口：`POST /api/task/query`
 
 ### AGV调度系统接口（AgvApiService）
-- ✅ 入库：呼叫入库 `POST /api/agv/inbound/call`
-- ✅ 送检：呼叫送检 `POST /api/agv/inspection/send`
-- ✅ 送检：空托回库 `POST /api/agv/pallet/returnFromInspection`
-- ✅ 回库：呼叫托盘 `POST /api/agv/pallet/callToInspection`
-- ✅ 回库：阀门回库 `POST /api/agv/valve/returnToWarehouse`
-- ✅ 出库：呼叫出库 `POST /api/agv/outbound/call`
-- ✅ 出库：空托回库 `POST /api/agv/pallet/returnFromSwap`
-- ✅ 取消任务 `POST /api/agv/task/cancel`
+- ✅ 统一任务发送接口 `POST /taskSent`（所有任务都通过此接口）
+  - 入库：呼叫入库（type=01，从置换区取货→库位放货）
+  - 送检：呼叫送检（type=01，从库位取货→检测区放货）
+  - 送检：空托回库（type=01，从检测区取空托→库位放空托）
+  - 回库：呼叫托盘（type=01，从库位取空托→检测区放空托）
+  - 回库：阀门回库（type=01，从检测区取货→库位放货）
+  - 出库：呼叫出库（type=01，从库位取货→置换区放货）
+  - 出库：空托回库（type=01，从置换区取空托→库位放空托）
+  - 取消任务（type=13，清空指定outID任务）
+- ✅ 查询任务结果 `POST /taskResult`（可选，用于查询任务状态）
 
 ## 3. 已更新的功能模块
 
@@ -78,14 +84,17 @@ Pallet pallet = wmsApiService.scanPallet(barcode, context);
 ### 呼叫入库
 ```java
 AgvApiService agvApiService = new AgvApiService();
-Map<String, String> params = new HashMap<>();
-params.put("palletNo", "11-01");
-params.put("palletType", "SMALL");
-params.put("swapStation", "WAREHOUSE_SWAP_1");
-params.put("binCode", "2-01");
-params.put("matCode", "MAT-DN50-001");
-params.put("operator", "张三");
-TaskResponse response = agvApiService.callInbound(params, context);
+String outID = DateUtil.generateTaskNo("R");  // 生成任务编号
+AgvResponse response = agvApiService.callInbound(
+    "WAREHOUSE_SWAP_1",  // 置换区站点
+    "2-01",              // 库位号
+    "MAT-DN50-001",      // 物料编码
+    outID,               // 任务编号
+    context
+);
+if (response.isSuccess()) {
+    // 成功，outID即为任务编号
+}
 ```
 
 ## 6. 注意事项

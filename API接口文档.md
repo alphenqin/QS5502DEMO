@@ -36,10 +36,10 @@ http://wms-server.example.com/api
 * **AGV 调度系统接口基础地址**
 
 ```text
-http://agv-dispatch.example.com/api
+http://192.168.1.20:81/pt
 ```
 
-（具体域名/IP 以现场部署为准）
+（具体域名/IP 以现场部署为准，当前配置为：192.168.1.20:81）
 
 ### 1.2 通用请求头
 
@@ -355,23 +355,47 @@ PDA 期望 WMS / AGV 返回统一格式：
 
 这一部分接口是 **PDA 直接调用 AGV 调度系统**，对应 PPT 中所有"呼叫 XXX""空托回库""阀门回库""取消任务"按钮。
 
-> **注意**：接口 URL、字段细节以《AGV 调度系统接口 V7.0》为准，本处只列出 **PDA 必须传入的核心字段**，方便安卓开发。
+> **注意**：所有 AGV 接口统一调用 `/taskSent` 接口，通过不同的 `type` 和 `points` 参数实现不同的业务功能。
 
-### 4.1 通用任务下发接口（示例）
+### 4.1 发送任务接口（统一接口）
 
-* **URL（示例）**：`POST /api/agv/task/create`
-* **说明**：创建一条 AGV 任务，type / points 等结构与 AGV 标准接口一致。
+* **URL**：`POST http://192.168.1.20:81/pt/taskSent`
+* **说明**：AGV 调度系统统一的任务发送接口，所有任务（取放货、充电、急停、取消等）都通过此接口发送。
 
-**核心请求字段（PDA 需要参与）**
+**请求参数**
 
-| 字段      | 说明                                              |
-| ------- | ----------------------------------------------- |
-| outID   | 业务任务编号（如 R20250751001），由 AGV 或中间层生成并返回给 PDA/WMS |
-| type    | 调度任务类型代码（如 01 取放货），由 AGV 接口定义                   |
-| matCode | 物料编码（阀门）                                        |
-| points  | 作业点数组（至少两个：起点/终点），包括 pointCode、binCode、取/放货标记等  |
+| 参数名称      | 数据类型 | 必填 | 说明                                              |
+| ------- | ------- | ---- | ----------------------------------------------- |
+| taskCode | string | 否 | 调度系统任务编号，不传则系统自动生成 |
+| type    | string | 是 | 任务类型：01取放货任务、05充电、10急停、12解除急停、13清空指定outID任务、18解除待命 |
+| IsOrder | string | 否 | 是否有序，默认否 |
+| agvRange | string | 否 | AGV范围，多个用逗号隔开 |
+| points  | array | 是（取放货任务） | 作业点对象列表 |
+| level   | string | 否 | 任务级别：1优先任务，2普通任务(默认) |
+| clearOutID | string | 否 | 被清空的外部业务id（清空指定任务时为必填） |
+| outID   | string | 否 | 外部业务id（PDA生成，格式：R/S/H/C + 时间戳） |
 
-PDA 不需要关注全部字段，只需要在不同按钮场景下，传入对应的 `pointCode` / `binCode` / `matCode` / `任务方向` 即可。
+**point对象参数**
+
+| 参数名称 | 数据类型 | 必填 | 说明 |
+| ------- | ------- | ---- | ---- |
+| sn | string | 是 | 作业序号 |
+| pointCode | string | 是 | 作业编号 |
+| pointType | string | 是 | 作业类型：02通用(包括取货)、04放货 |
+| matCode | string | 否 | 取放货物料信息 |
+
+**响应格式**
+
+```json
+{
+  "code": "20000",
+  "message": ""
+}
+```
+
+> **说明**：
+> * `code` 为字符串类型：`"20000"` 表示成功，`"90000"` 表示失败
+> * PDA 需要根据业务场景构建不同的 `points` 数组来实现不同的任务
 
 ---
 
@@ -379,38 +403,44 @@ PDA 不需要关注全部字段，只需要在不同按钮场景下，传入对�
 
 > PPT：入库二级页面第 3 步「呼叫入库」，调用 AGV，形成 R 开头的任务编号。
 
-* **URL（示例）**：`POST /api/agv/inbound/call`
-* **说明**：呼叫室外 + 室内 AGV 完成入库搬运（从置换区 → 仓库库位，同时回补空托）。PDA 只负责发起一次"入库呼叫"，具体 2 个 AGV 子任务由调度系统内部处理。
+* **URL**：`POST http://192.168.1.20:81/pt/taskSent`
+* **说明**：从置换区取货，放到仓库库位。
 
-**请求**
+**请求示例**
 
 ```json
 {
-  "palletNo": "11-01",
-  "palletType": "SMALL",
-  "swapStation": "WAREHOUSE_SWAP_1",
-  "binCode": "2-01",
-  "matCode": "MAT-DN50-001",
-  "operator": "张三"
+  "type": "01",
+  "outID": "R20250115145830123",
+  "level": "2",
+  "points": [
+    {
+      "sn": "01",
+      "pointCode": "WAREHOUSE_SWAP_1",
+      "pointType": "02"
+    },
+    {
+      "sn": "02",
+      "pointCode": "2-01",
+      "pointType": "04",
+      "matCode": "MAT-DN50-001"
+    }
+  ]
 }
 ```
 
 > 说明：
 >
-> * `swapStation` 对应置换区站点号（室外 AGV 取货点）；
-> * `binCode` 对应仓库库位（室内 AGV 放货点）；
-> * `matCode` 对应阀门物料编码。
+> * `outID` 由 PDA 生成，格式：R + 时间戳（如 R20250115145830123）
+> * `points[0]` 为取货点（置换区站点）
+> * `points[1]` 为放货点（仓库库位），需传入 `matCode`
 
 **响应**
 
 ```json
 {
-  "code": 200,
-  "message": "入库任务已受理",
-  "data": {
-    "outID": "R20250751001",
-    "status": "PENDING"
-  }
+  "code": "20000",
+  "message": ""
 }
 ```
 
@@ -420,18 +450,29 @@ PDA 不需要关注全部字段，只需要在不同按钮场景下，传入对�
 
 > PPT：送检二级页面：1 选阀门（WMS）→ 2 呼叫送检（AGV）。
 
-* **URL（示例）**：`POST /api/agv/inspection/send`
-* **说明**：从样品库库位搬运阀门至检测区站点。室内 AGV → 接驳位 → 室外 AGV → 检测区站点，由调度系统内部拆解。
+* **URL**：`POST http://192.168.1.20:81/pt/taskSent`
+* **说明**：从样品库库位取货，送到检测区站点。
 
-**请求**
+**请求示例**
 
 ```json
 {
-  "palletNo": "11-01",
-  "binCode": "2-01",
-  "matCode": "MAT-DN50-001",
-  "inspectionStation": "INSPECTION_STATION_1",
-  "operator": "李四"
+  "type": "01",
+  "outID": "S20250115145830123",
+  "level": "2",
+  "points": [
+    {
+      "sn": "01",
+      "pointCode": "2-01",
+      "pointType": "02"
+    },
+    {
+      "sn": "02",
+      "pointCode": "INSPECTION_STATION_1",
+      "pointType": "04",
+      "matCode": "MAT-DN50-001"
+    }
+  ]
 }
 ```
 
@@ -439,12 +480,8 @@ PDA 不需要关注全部字段，只需要在不同按钮场景下，传入对�
 
 ```json
 {
-  "code": 200,
-  "message": "送检任务已受理",
-  "data": {
-    "outID": "S20250751001",
-    "status": "PENDING"
-  }
+  "code": "20000",
+  "message": ""
 }
 ```
 
@@ -454,34 +491,41 @@ PDA 不需要关注全部字段，只需要在不同按钮场景下，传入对�
 
 > PPT：送检二级页面第 3 步「空托回库」，检测区工作人员在阀门取下后，从 PDA 点空托回库。
 
-* **URL（示例）**：`POST /api/agv/pallet/returnFromInspection`
-* **说明**：从检测区站点搬运空托盘回样品库中对应库位。
+* **URL**：`POST http://192.168.1.20:81/pt/taskSent`
+* **说明**：从检测区站点取空托盘，送回样品库库位。
 
-**请求**
+**请求示例**
 
 ```json
 {
-  "palletNo": "11-01",
-  "binCode": "2-01",
-  "inspectionStation": "INSPECTION_STATION_1",
-  "operator": "王五"
+  "type": "01",
+  "outID": "H20250115145830123",
+  "level": "2",
+  "points": [
+    {
+      "sn": "01",
+      "pointCode": "INSPECTION_STATION_1",
+      "pointType": "02"
+    },
+    {
+      "sn": "02",
+      "pointCode": "2-01",
+      "pointType": "04"
+    }
+  ]
 }
 ```
+
+> 说明：空托回库时，放货点不传 `matCode`（或传空字符串）
 
 **响应**
 
 ```json
 {
-  "code": 200,
-  "message": "空托回库任务已受理",
-  "data": {
-    "outID": "H20250751002",
-    "status": "PENDING"
-  }
+  "code": "20000",
+  "message": ""
 }
 ```
-
-> 实际上此类"空托回库任务"在 AGV 端仍是取/放货任务，只是 `matCode` 为空或标识为"空托"。
 
 ---
 
@@ -489,17 +533,28 @@ PDA 不需要关注全部字段，只需要在不同按钮场景下，传入对�
 
 > PPT：回库二级页面：1 选阀门（WMS）→ 2 呼叫托盘（AGV：送空托到检测区）。
 
-* **URL（示例）**：`POST /api/agv/pallet/callToInspection`
-* **说明**：从样品库把空托盘送到检测区站点，供工人将检测完的阀门放上去。
+* **URL**：`POST http://192.168.1.20:81/pt/taskSent`
+* **说明**：从样品库库位取空托盘，送到检测区站点。
 
-**请求**
+**请求示例**
 
 ```json
 {
-  "palletNo": "11-01",
-  "binCode": "2-01",
-  "inspectionStation": "INSPECTION_STATION_1",
-  "operator": "赵六"
+  "type": "01",
+  "outID": "H20250115145830123",
+  "level": "2",
+  "points": [
+    {
+      "sn": "01",
+      "pointCode": "2-01",
+      "pointType": "02"
+    },
+    {
+      "sn": "02",
+      "pointCode": "INSPECTION_STATION_1",
+      "pointType": "04"
+    }
+  ]
 }
 ```
 
@@ -507,12 +562,8 @@ PDA 不需要关注全部字段，只需要在不同按钮场景下，传入对�
 
 ```json
 {
-  "code": 200,
-  "message": "呼叫托盘任务已受理",
-  "data": {
-    "outID": "H20250751003",
-    "status": "PENDING"
-  }
+  "code": "20000",
+  "message": ""
 }
 ```
 
@@ -522,18 +573,29 @@ PDA 不需要关注全部字段，只需要在不同按钮场景下，传入对�
 
 > PPT：回库第 3 步「阀门回库」，检测区工人将阀门放到托盘上后，从 PDA 点"回库"。
 
-* **URL（示例）**：`POST /api/agv/valve/returnToWarehouse`
-* **说明**：从检测区站点把载有阀门的托盘搬回样品库库位。
+* **URL**：`POST http://192.168.1.20:81/pt/taskSent`
+* **说明**：从检测区站点取载有阀门的托盘，送回样品库库位。
 
-**请求**
+**请求示例**
 
 ```json
 {
-  "palletNo": "11-01",
-  "binCode": "2-01",
-  "matCode": "MAT-DN50-001",
-  "inspectionStation": "INSPECTION_STATION_1",
-  "operator": "王五"
+  "type": "01",
+  "outID": "H20250115145830123",
+  "level": "2",
+  "points": [
+    {
+      "sn": "01",
+      "pointCode": "INSPECTION_STATION_1",
+      "pointType": "02"
+    },
+    {
+      "sn": "02",
+      "pointCode": "2-01",
+      "pointType": "04",
+      "matCode": "MAT-DN50-001"
+    }
+  ]
 }
 ```
 
@@ -541,12 +603,8 @@ PDA 不需要关注全部字段，只需要在不同按钮场景下，传入对�
 
 ```json
 {
-  "code": 200,
-  "message": "回库任务已受理",
-  "data": {
-    "outID": "H20250751004",
-    "status": "PENDING"
-  }
+  "code": "20000",
+  "message": ""
 }
 ```
 
@@ -556,18 +614,29 @@ PDA 不需要关注全部字段，只需要在不同按钮场景下，传入对�
 
 > PPT：出库二级页面：1 选阀门（WMS）→ 2 呼叫出库（AGV）。
 
-* **URL（示例）**：`POST /api/agv/outbound/call`
-* **说明**：从样品库库位搬运阀门到库前置换区，用于装车回厂。
+* **URL**：`POST http://192.168.1.20:81/pt/taskSent`
+* **说明**：从样品库库位取货，送到库前置换区。
 
-**请求**
+**请求示例**
 
 ```json
 {
-  "palletNo": "11-01",
-  "binCode": "2-01",
-  "matCode": "MAT-DN50-001",
-  "swapStation": "WAREHOUSE_SWAP_1",
-  "operator": "张三"
+  "type": "01",
+  "outID": "C20250115145830123",
+  "level": "2",
+  "points": [
+    {
+      "sn": "01",
+      "pointCode": "2-01",
+      "pointType": "02"
+    },
+    {
+      "sn": "02",
+      "pointCode": "WAREHOUSE_SWAP_1",
+      "pointType": "04",
+      "matCode": "MAT-DN50-001"
+    }
+  ]
 }
 ```
 
@@ -575,12 +644,8 @@ PDA 不需要关注全部字段，只需要在不同按钮场景下，传入对�
 
 ```json
 {
-  "code": 200,
-  "message": "出库任务已受理",
-  "data": {
-    "outID": "C20250751001",
-    "status": "PENDING"
-  }
+  "code": "20000",
+  "message": ""
 }
 ```
 
@@ -590,17 +655,28 @@ PDA 不需要关注全部字段，只需要在不同按钮场景下，传入对�
 
 > PPT：出库第 3 步「空托回库」，工人取下阀门装车后，从 PDA 点空托回库。
 
-* **URL（示例）**：`POST /api/agv/pallet/returnFromSwap`
-* **说明**：从库前置换区把空托盘搬回样品库库位。
+* **URL**：`POST http://192.168.1.20:81/pt/taskSent`
+* **说明**：从库前置换区取空托盘，送回样品库库位。
 
-**请求**
+**请求示例**
 
 ```json
 {
-  "palletNo": "11-01",
-  "binCode": "2-01",
-  "swapStation": "WAREHOUSE_SWAP_1",
-  "operator": "李四"
+  "type": "01",
+  "outID": "H20250115145830123",
+  "level": "2",
+  "points": [
+    {
+      "sn": "01",
+      "pointCode": "WAREHOUSE_SWAP_1",
+      "pointType": "02"
+    },
+    {
+      "sn": "02",
+      "pointCode": "2-01",
+      "pointType": "04"
+    }
+  ]
 }
 ```
 
@@ -608,12 +684,8 @@ PDA 不需要关注全部字段，只需要在不同按钮场景下，传入对�
 
 ```json
 {
-  "code": 200,
-  "message": "空托回库任务已受理",
-  "data": {
-    "outID": "H20250751005",
-    "status": "PENDING"
-  }
+  "code": "20000",
+  "message": ""
 }
 ```
 
@@ -623,15 +695,16 @@ PDA 不需要关注全部字段，只需要在不同按钮场景下，传入对�
 
 > PPT：在任务查询结果中，工人勾选"待执行"任务后点击"取消任务"，执行中的任务不能取消。
 
-* **URL（示例）**：`POST /api/agv/task/cancel`
-* **说明**：请求 AGV 调度系统取消指定 `outID` 的任务（仅限未执行/未下发任务）。
+* **URL**：`POST http://192.168.1.20:81/pt/taskSent`
+* **说明**：清空指定 `outID` 的任务。
 
-**请求**
+**请求示例**
 
 ```json
 {
-  "outID": "R20250751001",
-  "operator": "张三"
+  "type": "13",
+  "clearOutID": "R20250115145830123",
+  "outID": "R20250115145830123"
 }
 ```
 
@@ -639,15 +712,59 @@ PDA 不需要关注全部字段，只需要在不同按钮场景下，传入对�
 
 ```json
 {
-  "code": 200,
-  "message": "任务取消成功",
-  "data": {
-    "success": true
-  }
+  "code": "20000",
+  "message": ""
 }
 ```
 
-> 若任务已开始执行，AGV 返回失败；PDA 前端据此提示"任务状态不允许取消"。
+> 说明：
+> * `type` 为 `"13"` 表示清空指定outID任务
+> * `clearOutID` 和 `outID` 都传入要取消的任务编号
+> * 若任务已开始执行，AGV 返回失败；PDA 前端据此提示"任务状态不允许取消"
+
+### 4.10 查询任务结果接口（可选）
+
+* **URL**：`POST http://192.168.1.20:81/pt/taskResult`
+* **说明**：查询指定任务的状态和执行情况。
+
+**请求**
+
+```json
+{
+  "outID": "R20250115145830123"
+}
+```
+
+**响应**
+
+```json
+{
+  "code": "20000",
+  "status": "02",
+  "points": [
+    {
+      "sn": "01",
+      "pointCode": "WAREHOUSE_SWAP_1",
+      "pointType": "02",
+      "pointAction": "01-04-02-06-03",
+      "pointStep": "01-04-02"
+    },
+    {
+      "sn": "02",
+      "pointCode": "2-01",
+      "pointType": "04",
+      "pointAction": "01-06-02-05-03",
+      "pointStep": ""
+    }
+  ],
+  "agvCode": "1",
+  "message": ""
+}
+```
+
+> 说明：
+> * `status`：01等待执行、02执行中、08执行完成、09强制清空
+> * `pointStep` 与 `pointAction` 一致时，表示该作业点执行完成
 
 ---
 

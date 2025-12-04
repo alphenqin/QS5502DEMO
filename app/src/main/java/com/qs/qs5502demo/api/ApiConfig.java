@@ -11,7 +11,7 @@ public class ApiConfig {
     public static final String WMS_BASE_URL = "http://wms-server.example.com/api";
     
     // AGV调度系统接口基础地址
-    public static final String AGV_BASE_URL = "http://agv-dispatch.example.com/api";
+    public static final String AGV_BASE_URL = "http://192.168.1.20:81/pt";
     
     /**
      * 设置WMS服务器地址（可在运行时动态配置）

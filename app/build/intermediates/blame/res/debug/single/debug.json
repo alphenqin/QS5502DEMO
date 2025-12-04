@@ -28,6 +28,10 @@
         "source": "D:\\360 project\\QS5502DEMO\\app\\src\\main\\res\\layout\\activity_select_valve.xml"
     },
     {
+        "merged": "D:\\360 project\\QS5502DEMO\\app\\build\\intermediates\\res\\merged\\debug\\layout_activity_login.xml.flat",
+        "source": "D:\\360 project\\QS5502DEMO\\app\\src\\main\\res\\layout\\activity_login.xml"
+    },
+    {
         "merged": "D:\\360 project\\QS5502DEMO\\app\\build\\intermediates\\res\\merged\\debug\\layout_activity_inbound.xml.flat",
         "source": "D:\\360 project\\QS5502DEMO\\app\\src\\main\\res\\layout\\activity_inbound.xml"
     },

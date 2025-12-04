@@ -14,12 +14,10 @@ import android.widget.Toast;
 import com.qs.pda5502demo.R;
 import com.qs.qs5502demo.api.AgvApiService;
 import com.qs.qs5502demo.api.WmsApiService;
+import com.qs.qs5502demo.model.AgvResponse;
 import com.qs.qs5502demo.model.Pallet;
-import com.qs.qs5502demo.model.TaskResponse;
+import com.qs.qs5502demo.util.DateUtil;
 import com.qs.qs5502demo.util.ScanHelper;
-
-import java.util.HashMap;
-import java.util.Map;
 
 public class InboundActivity extends Activity {
     
@@ -213,31 +211,25 @@ public class InboundActivity extends Activity {
             @Override
             public void run() {
                 try {
-                    // 构建请求参数
-                    Map<String, String> params = new HashMap<>();
-                    params.put("palletNo", palletNo);
-                    params.put("palletType", palletType);
-                    params.put("swapStation", swapStation);
-                    params.put("binCode", binCode);
-                    if (matCode != null && !matCode.isEmpty()) {
-                        params.put("matCode", matCode);
-                    }
-                    params.put("operator", com.qs.qs5502demo.util.PreferenceUtil.getUserName(InboundActivity.this));
+                    // 生成任务编号
+                    String outID = DateUtil.generateTaskNo("R");
                     
                     // 调用AGV接口创建入库任务
-                    TaskResponse response = agvApiService.callInbound(params, InboundActivity.this);
+                    AgvResponse response = agvApiService.callInbound(
+                        swapStation, binCode, matCode, outID, InboundActivity.this);
                     
                     // 更新UI
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            if (response != null && response.getOutID() != null) {
+                            if (response != null && response.isSuccess()) {
                                 updateStatus(true);
                                 Toast.makeText(InboundActivity.this, 
-                                    "呼叫入库成功，任务号：" + response.getOutID(), 
+                                    "呼叫入库成功，任务号：" + outID, 
                                     Toast.LENGTH_LONG).show();
                             } else {
-                                Toast.makeText(InboundActivity.this, "呼叫入库失败", Toast.LENGTH_SHORT).show();
+                                String msg = response != null ? response.getMessage() : "呼叫入库失败";
+                                Toast.makeText(InboundActivity.this, msg, Toast.LENGTH_SHORT).show();
                             }
                         }
                     });

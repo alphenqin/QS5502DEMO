@@ -12,13 +12,10 @@ import android.widget.Toast;
 
 import com.qs.pda5502demo.R;
 import com.qs.qs5502demo.api.AgvApiService;
-import com.qs.qs5502demo.model.TaskResponse;
+import com.qs.qs5502demo.model.AgvResponse;
 import com.qs.qs5502demo.model.Valve;
 import com.qs.qs5502demo.send.SelectValveActivity;
-import com.qs.qs5502demo.util.PreferenceUtil;
-
-import java.util.HashMap;
-import java.util.Map;
+import com.qs.qs5502demo.util.DateUtil;
 
 public class ReturnWarehouseActivity extends Activity {
     
@@ -135,25 +132,23 @@ public class ReturnWarehouseActivity extends Activity {
             @Override
             public void run() {
                 try {
-                    // 构建请求参数
-                    Map<String, String> params = new HashMap<>();
-                    params.put("palletNo", palletNo);
-                    params.put("binCode", binCode);
-                    params.put("inspectionStation", inspectionStation);
-                    params.put("operator", PreferenceUtil.getUserName(ReturnWarehouseActivity.this));
+                    // 生成任务编号
+                    String outID = DateUtil.generateTaskNo("H");
                     
                     // 调用AGV接口创建呼叫托盘任务
-                    TaskResponse response = agvApiService.callPalletToInspection(params, ReturnWarehouseActivity.this);
+                    AgvResponse response = agvApiService.callPalletToInspection(
+                        binCode, inspectionStation, outID, ReturnWarehouseActivity.this);
                     
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            if (response != null && response.getOutID() != null) {
+                            if (response != null && response.isSuccess()) {
                                 Toast.makeText(ReturnWarehouseActivity.this, 
-                                    "呼叫托盘成功，任务号：" + response.getOutID(), 
+                                    "呼叫托盘成功，任务号：" + outID, 
                                     Toast.LENGTH_LONG).show();
                             } else {
-                                Toast.makeText(ReturnWarehouseActivity.this, "呼叫托盘失败", Toast.LENGTH_SHORT).show();
+                                String msg = response != null ? response.getMessage() : "呼叫托盘失败";
+                                Toast.makeText(ReturnWarehouseActivity.this, msg, Toast.LENGTH_SHORT).show();
                             }
                         }
                     });
@@ -202,27 +197,24 @@ public class ReturnWarehouseActivity extends Activity {
             @Override
             public void run() {
                 try {
-                    // 构建请求参数
-                    Map<String, String> params = new HashMap<>();
-                    params.put("palletNo", palletNo);
-                    params.put("binCode", binCode);
-                    params.put("matCode", matCode);
-                    params.put("inspectionStation", inspectionStation);
-                    params.put("operator", PreferenceUtil.getUserName(ReturnWarehouseActivity.this));
+                    // 生成任务编号
+                    String outID = DateUtil.generateTaskNo("H");
                     
                     // 调用AGV接口创建阀门回库任务
-                    TaskResponse response = agvApiService.returnValveToWarehouse(params, ReturnWarehouseActivity.this);
+                    AgvResponse response = agvApiService.returnValveToWarehouse(
+                        inspectionStation, binCode, matCode, outID, ReturnWarehouseActivity.this);
                     
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            if (response != null && response.getOutID() != null) {
+                            if (response != null && response.isSuccess()) {
                                 updateStatus(true);
                                 Toast.makeText(ReturnWarehouseActivity.this, 
-                                    "阀门回库成功，任务号：" + response.getOutID(), 
+                                    "阀门回库成功，任务号：" + outID, 
                                     Toast.LENGTH_LONG).show();
                             } else {
-                                Toast.makeText(ReturnWarehouseActivity.this, "阀门回库失败", Toast.LENGTH_SHORT).show();
+                                String msg = response != null ? response.getMessage() : "阀门回库失败";
+                                Toast.makeText(ReturnWarehouseActivity.this, msg, Toast.LENGTH_SHORT).show();
                             }
                         }
                     });
