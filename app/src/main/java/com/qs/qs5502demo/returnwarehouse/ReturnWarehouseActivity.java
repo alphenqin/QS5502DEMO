@@ -11,11 +11,14 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.qs.pda5502demo.R;
-import com.qs.qs5502demo.api.ApiClient;
-import com.qs.qs5502demo.api.ApiService;
-import com.qs.qs5502demo.model.Task;
+import com.qs.qs5502demo.api.AgvApiService;
+import com.qs.qs5502demo.model.TaskResponse;
 import com.qs.qs5502demo.model.Valve;
 import com.qs.qs5502demo.send.SelectValveActivity;
+import com.qs.qs5502demo.util.PreferenceUtil;
+
+import java.util.HashMap;
+import java.util.Map;
 
 public class ReturnWarehouseActivity extends Activity {
     
@@ -28,10 +31,12 @@ public class ReturnWarehouseActivity extends Activity {
     private Button btnValveReturn2;
     private Button btnBack;
     
-    private ApiService apiService;
+    private AgvApiService agvApiService;
     
     private String palletNo;
-    private String locationCode;
+    private String binCode;
+    private String matCode;
+    private String inspectionStation = "INSPECTION_STATION_1"; // 检测区站点
     private Valve selectedValve;
 
     @Override
@@ -39,7 +44,7 @@ public class ReturnWarehouseActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_return);
         
-        apiService = new ApiClient();
+        agvApiService = new AgvApiService();
         
         initViews();
         setupListeners();
@@ -109,7 +114,7 @@ public class ReturnWarehouseActivity extends Activity {
         
         new AlertDialog.Builder(this)
             .setTitle("确认呼叫托盘")
-            .setMessage("将空托盘从库位 " + locationCode + " 运送到检测区站点")
+            .setMessage("将空托盘从库位 " + binCode + " 运送到检测区站点")
             .setPositiveButton("确认", new android.content.DialogInterface.OnClickListener() {
                 @Override
                 public void onClick(android.content.DialogInterface dialog, int which) {
@@ -130,21 +135,22 @@ public class ReturnWarehouseActivity extends Activity {
             @Override
             public void run() {
                 try {
-                    Task task = apiService.createTask(
-                        Task.TYPE_RETURN,
-                        palletNo,
-                        locationCode,
-                        "WAREHOUSE_LOCATION_" + locationCode.replace("-", "_"),
-                        "INSPECTION_STATION",
-                        selectedValve.getValveNo()
-                    );
+                    // 构建请求参数
+                    Map<String, String> params = new HashMap<>();
+                    params.put("palletNo", palletNo);
+                    params.put("binCode", binCode);
+                    params.put("inspectionStation", inspectionStation);
+                    params.put("operator", PreferenceUtil.getUserName(ReturnWarehouseActivity.this));
+                    
+                    // 调用AGV接口创建呼叫托盘任务
+                    TaskResponse response = agvApiService.callPalletToInspection(params, ReturnWarehouseActivity.this);
                     
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            if (task != null && task.getTaskNo() != null) {
+                            if (response != null && response.getOutID() != null) {
                                 Toast.makeText(ReturnWarehouseActivity.this, 
-                                    "呼叫托盘成功，任务号：" + task.getTaskNo(), 
+                                    "呼叫托盘成功，任务号：" + response.getOutID(), 
                                     Toast.LENGTH_LONG).show();
                             } else {
                                 Toast.makeText(ReturnWarehouseActivity.this, "呼叫托盘失败", Toast.LENGTH_SHORT).show();
@@ -168,14 +174,14 @@ public class ReturnWarehouseActivity extends Activity {
      * 阀门回库
      */
     private void callValveReturn(String palletType) {
-        if (locationCode == null || locationCode.isEmpty()) {
+        if (binCode == null || binCode.isEmpty()) {
             Toast.makeText(this, "请先选择阀门", Toast.LENGTH_SHORT).show();
             return;
         }
         
         new AlertDialog.Builder(this)
             .setTitle("确认阀门回库")
-            .setMessage("将" + palletType + "#阀门送回库位：" + locationCode)
+            .setMessage("将" + palletType + "#阀门送回库位：" + binCode)
             .setPositiveButton("确认", new android.content.DialogInterface.OnClickListener() {
                 @Override
                 public void onClick(android.content.DialogInterface dialog, int which) {
@@ -196,22 +202,24 @@ public class ReturnWarehouseActivity extends Activity {
             @Override
             public void run() {
                 try {
-                    Task task = apiService.createTask(
-                        Task.TYPE_RETURN,
-                        palletNo,
-                        locationCode,
-                        "INSPECTION_STATION",
-                        "WAREHOUSE_LOCATION_" + locationCode.replace("-", "_"),
-                        selectedValve != null ? selectedValve.getValveNo() : null
-                    );
+                    // 构建请求参数
+                    Map<String, String> params = new HashMap<>();
+                    params.put("palletNo", palletNo);
+                    params.put("binCode", binCode);
+                    params.put("matCode", matCode);
+                    params.put("inspectionStation", inspectionStation);
+                    params.put("operator", PreferenceUtil.getUserName(ReturnWarehouseActivity.this));
+                    
+                    // 调用AGV接口创建阀门回库任务
+                    TaskResponse response = agvApiService.returnValveToWarehouse(params, ReturnWarehouseActivity.this);
                     
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            if (task != null && task.getTaskNo() != null) {
+                            if (response != null && response.getOutID() != null) {
                                 updateStatus(true);
                                 Toast.makeText(ReturnWarehouseActivity.this, 
-                                    "阀门回库成功，任务号：" + task.getTaskNo(), 
+                                    "阀门回库成功，任务号：" + response.getOutID(), 
                                     Toast.LENGTH_LONG).show();
                             } else {
                                 Toast.makeText(ReturnWarehouseActivity.this, "阀门回库失败", Toast.LENGTH_SHORT).show();
@@ -250,10 +258,11 @@ public class ReturnWarehouseActivity extends Activity {
             selectedValve = (Valve) data.getSerializableExtra("valve");
             if (selectedValve != null) {
                 palletNo = selectedValve.getPalletNo();
-                locationCode = selectedValve.getLocationCode();
+                binCode = selectedValve.getBinCode();
+                matCode = selectedValve.getMatCode();
                 
                 tvPalletNo.setText(palletNo);
-                tvLocationCode.setText(locationCode);
+                tvLocationCode.setText(binCode);
                 updateStatus(true);
             }
         }

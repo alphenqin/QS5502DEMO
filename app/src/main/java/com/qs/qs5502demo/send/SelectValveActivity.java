@@ -12,8 +12,8 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.qs.pda5502demo.R;
-import com.qs.qs5502demo.api.ApiClient;
-import com.qs.qs5502demo.api.ApiService;
+import com.qs.qs5502demo.api.WmsApiService;
+import com.qs.qs5502demo.model.PageResponse;
 import com.qs.qs5502demo.model.Valve;
 
 import java.util.ArrayList;
@@ -35,7 +35,7 @@ public class SelectValveActivity extends Activity {
     private Button btnBack;
     private RecyclerView rvValveList;
     
-    private ApiService apiService;
+    private WmsApiService wmsApiService;
     private ValveAdapter adapter;
     private List<Valve> valveList;
     private Valve selectedValve;
@@ -45,7 +45,7 @@ public class SelectValveActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_select_valve);
         
-        apiService = new ApiClient();
+        wmsApiService = new WmsApiService(this);
         valveList = new ArrayList<>();
         
         initViews();
@@ -115,20 +115,34 @@ public class SelectValveActivity extends Activity {
             params.put("inboundDate", inboundDate);
         }
         
+        // 添加分页参数
+        params.put("pageNum", "1");
+        params.put("pageSize", "20");
+        
+        // 根据任务类型设置阀门状态筛选
+        String taskType = getIntent().getStringExtra("taskType");
+        if (taskType != null) {
+            if ("SEND_INSPECTION".equals(taskType) || "OUTBOUND".equals(taskType)) {
+                params.put("valveStatus", "IN_STOCK"); // 送检和出库只查询在库的
+            } else if ("RETURN".equals(taskType)) {
+                params.put("valveStatus", "INSPECTED"); // 回库只查询已检测的
+            }
+        }
+        
         Toast.makeText(this, "正在查询...", Toast.LENGTH_SHORT).show();
         
         new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
-                    List<Valve> result = apiService.queryValves(params);
+                    PageResponse<Valve> pageResponse = wmsApiService.queryValves(params, SelectValveActivity.this);
                     
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
                             valveList.clear();
-                            if (result != null) {
-                                valveList.addAll(result);
+                            if (pageResponse != null && pageResponse.getList() != null) {
+                                valveList.addAll(pageResponse.getList());
                             }
                             adapter.notifyDataSetChanged();
                             
@@ -225,7 +239,7 @@ public class SelectValveActivity extends Activity {
                 tvValveNo.setText("阀门编号：" + valve.getValveNo());
                 tvValveModel.setText("阀门型号：" + valve.getValveModel());
                 tvVendorName.setText("厂家：" + valve.getVendorName());
-                tvPalletInfo.setText("托盘：" + valve.getPalletNo() + "  库位：" + valve.getLocationCode());
+                tvPalletInfo.setText("托盘：" + valve.getPalletNo() + "  库位：" + valve.getBinCode());
                 tvInboundDate.setText("入库日期：" + valve.getInboundDate());
             }
         }

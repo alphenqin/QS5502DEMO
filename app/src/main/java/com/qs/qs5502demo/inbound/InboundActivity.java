@@ -12,11 +12,14 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.qs.pda5502demo.R;
-import com.qs.qs5502demo.api.ApiClient;
-import com.qs.qs5502demo.api.ApiService;
+import com.qs.qs5502demo.api.AgvApiService;
+import com.qs.qs5502demo.api.WmsApiService;
 import com.qs.qs5502demo.model.Pallet;
-import com.qs.qs5502demo.model.Task;
+import com.qs.qs5502demo.model.TaskResponse;
 import com.qs.qs5502demo.util.ScanHelper;
+
+import java.util.HashMap;
+import java.util.Map;
 
 public class InboundActivity extends Activity {
     
@@ -28,11 +31,15 @@ public class InboundActivity extends Activity {
     private Button btnCallInbound;
     private Button btnBack;
     
-    private ApiService apiService;
+    private WmsApiService wmsApiService;
+    private AgvApiService agvApiService;
     private ScanHelper scanHelper;
     
     private String palletNo;
-    private String locationCode;
+    private String binCode;
+    private String swapStation;
+    private String palletType;
+    private String matCode;  // 阀门物料编码
     private boolean isValveBound = false;  // 阀门是否已绑定
 
     @Override
@@ -40,7 +47,8 @@ public class InboundActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_inbound);
         
-        apiService = new ApiClient();
+        wmsApiService = new WmsApiService(this);
+        agvApiService = new AgvApiService();
         scanHelper = new ScanHelper(this);
         
         initViews();
@@ -85,7 +93,9 @@ public class InboundActivity extends Activity {
                 // 跳转到阀门绑定页面
                 Intent intent = new Intent(InboundActivity.this, BindValveActivity.class);
                 intent.putExtra("palletNo", palletNo);
-                intent.putExtra("locationCode", locationCode);
+                intent.putExtra("binCode", binCode);
+                intent.putExtra("swapStation", swapStation);
+                intent.putExtra("palletType", palletType);
                 startActivityForResult(intent, 100);
             }
         });
@@ -122,26 +132,45 @@ public class InboundActivity extends Activity {
      * 处理扫码结果
      */
     private void handleScanResult(String barcode) {
-        try {
-            // 调用API获取托盘信息
-            Pallet pallet = apiService.scanPallet(barcode);
-            
-            if (pallet != null) {
-                palletNo = pallet.getPalletNo();
-                locationCode = pallet.getLocationCode();
-                
-                tvPalletNo.setText(palletNo);
-                tvLocationCode.setText(locationCode);
-                
-                updateStatus(true);
-                Toast.makeText(this, "扫码成功", Toast.LENGTH_SHORT).show();
-            } else {
-                Toast.makeText(this, "扫码失败，未找到托盘信息", Toast.LENGTH_SHORT).show();
+        // 在后台线程执行网络请求
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    // 调用API获取托盘信息
+                    Pallet pallet = wmsApiService.scanPallet(barcode, InboundActivity.this);
+                    
+                    // 切换到主线程更新UI
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (pallet != null) {
+                                palletNo = pallet.getPalletNo();
+                                binCode = pallet.getBinCode();
+                                swapStation = pallet.getSwapStation();
+                                palletType = pallet.getPalletType();
+                                
+                                tvPalletNo.setText(palletNo);
+                                tvLocationCode.setText(binCode);
+                                
+                                updateStatus(true);
+                                Toast.makeText(InboundActivity.this, "扫码成功", Toast.LENGTH_SHORT).show();
+                            } else {
+                                Toast.makeText(InboundActivity.this, "扫码失败，未找到托盘信息", Toast.LENGTH_SHORT).show();
+                            }
+                        }
+                    });
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            Toast.makeText(InboundActivity.this, "扫码失败：" + e.getMessage(), Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                }
             }
-        } catch (Exception e) {
-            e.printStackTrace();
-            Toast.makeText(this, "扫码失败：" + e.getMessage(), Toast.LENGTH_SHORT).show();
-        }
+        }).start();
     }
     
     /**
@@ -161,7 +190,7 @@ public class InboundActivity extends Activity {
         // 显示确认对话框
         new AlertDialog.Builder(this)
             .setTitle("确认呼叫入库")
-            .setMessage("托盘号：" + palletNo + "\n库位号：" + locationCode)
+            .setMessage("托盘号：" + palletNo + "\n库位号：" + binCode)
             .setPositiveButton("确认", new android.content.DialogInterface.OnClickListener() {
                 @Override
                 public void onClick(android.content.DialogInterface dialog, int which) {
@@ -184,24 +213,28 @@ public class InboundActivity extends Activity {
             @Override
             public void run() {
                 try {
-                    // 创建入库任务
-                    Task task = apiService.createTask(
-                        Task.TYPE_INBOUND,
-                        palletNo,
-                        locationCode,
-                        "WAREHOUSE_SWAP_1",
-                        "WAREHOUSE_LOCATION_" + locationCode.replace("-", "_"),
-                        null
-                    );
+                    // 构建请求参数
+                    Map<String, String> params = new HashMap<>();
+                    params.put("palletNo", palletNo);
+                    params.put("palletType", palletType);
+                    params.put("swapStation", swapStation);
+                    params.put("binCode", binCode);
+                    if (matCode != null && !matCode.isEmpty()) {
+                        params.put("matCode", matCode);
+                    }
+                    params.put("operator", com.qs.qs5502demo.util.PreferenceUtil.getUserName(InboundActivity.this));
+                    
+                    // 调用AGV接口创建入库任务
+                    TaskResponse response = agvApiService.callInbound(params, InboundActivity.this);
                     
                     // 更新UI
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            if (task != null && task.getTaskNo() != null) {
+                            if (response != null && response.getOutID() != null) {
                                 updateStatus(true);
                                 Toast.makeText(InboundActivity.this, 
-                                    "呼叫入库成功，任务号：" + task.getTaskNo(), 
+                                    "呼叫入库成功，任务号：" + response.getOutID(), 
                                     Toast.LENGTH_LONG).show();
                             } else {
                                 Toast.makeText(InboundActivity.this, "呼叫入库失败", Toast.LENGTH_SHORT).show();
@@ -236,7 +269,10 @@ public class InboundActivity extends Activity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == 100 && resultCode == RESULT_OK) {
-            // 阀门绑定成功
+            // 阀门绑定成功，获取物料编码
+            if (data != null) {
+                matCode = data.getStringExtra("matCode");
+            }
             isValveBound = true;
             updateStatus(true);
             Toast.makeText(this, "阀门绑定成功", Toast.LENGTH_SHORT).show();

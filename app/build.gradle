@@ -27,4 +27,8 @@ dependencies {
     // RecyclerView支持库
     implementation 'com.android.support:recyclerview-v7:23.4.0'
     implementation 'com.android.support:appcompat-v7:23.4.0'
+    
+    // 网络请求库
+    implementation 'com.squareup.okhttp3:okhttp:3.12.12'
+    implementation 'com.google.code.gson:gson:2.8.5'
 }

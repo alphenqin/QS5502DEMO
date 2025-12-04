@@ -9,8 +9,9 @@ public class Pallet implements Serializable {
     private static final long serialVersionUID = 1L;
     private String palletNo;        // 托盘编号，如 "11-01"
     private String palletType;      // 托盘型号：SMALL / LARGE
-    private String swapStation;     // 置换区站点，如 "1-SMALL"
-    private String locationCode;    // 库位号，如 "2-01"
+    private String swapStation;     // 置换区站点，如 "WAREHOUSE_SWAP_1"
+    private String binCode;         // 库位号，与调度系统 binCode 一致，如 "2-01"
+    private String locationCode;    // 库位号（兼容旧字段），如 "2-01"
 
     public Pallet() {
     }
@@ -46,12 +47,22 @@ public class Pallet implements Serializable {
         this.swapStation = swapStation;
     }
 
+    public String getBinCode() {
+        return binCode != null ? binCode : locationCode;
+    }
+
+    public void setBinCode(String binCode) {
+        this.binCode = binCode;
+        this.locationCode = binCode; // 兼容旧字段
+    }
+
     public String getLocationCode() {
-        return locationCode;
+        return locationCode != null ? locationCode : binCode;
     }
 
     public void setLocationCode(String locationCode) {
         this.locationCode = locationCode;
+        this.binCode = locationCode; // 同步更新
     }
 }
 

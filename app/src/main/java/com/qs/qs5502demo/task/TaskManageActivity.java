@@ -13,13 +13,17 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.qs.pda5502demo.R;
-import com.qs.qs5502demo.api.ApiClient;
-import com.qs.qs5502demo.api.ApiService;
+import com.qs.qs5502demo.api.AgvApiService;
+import com.qs.qs5502demo.api.WmsApiService;
+import com.qs.qs5502demo.model.PageResponse;
 import com.qs.qs5502demo.model.Task;
 import com.qs.qs5502demo.util.DateUtil;
+import com.qs.qs5502demo.util.PreferenceUtil;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.LinearLayoutManager;
@@ -34,7 +38,8 @@ public class TaskManageActivity extends Activity {
     private Button btnBack;
     private RecyclerView rvTaskList;
     
-    private ApiService apiService;
+    private WmsApiService wmsApiService;
+    private AgvApiService agvApiService;
     private TaskAdapter adapter;
     private List<Task> taskList;
     private Task selectedTask;
@@ -44,7 +49,8 @@ public class TaskManageActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_task_manage);
         
-        apiService = new ApiClient();
+        wmsApiService = new WmsApiService(this);
+        agvApiService = new AgvApiService();
         taskList = new ArrayList<>();
         
         initViews();
@@ -112,9 +118,16 @@ public class TaskManageActivity extends Activity {
             endDate = DateUtil.getCurrentDate();
         }
         
-        // 创建final变量供内部类使用
-        final String finalStartDate = startDate.isEmpty() ? null : startDate;
-        final String finalEndDate = endDate.isEmpty() ? null : endDate;
+        // 构建查询参数
+        final Map<String, String> params = new HashMap<>();
+        if (!startDate.isEmpty()) {
+            params.put("startDate", startDate);
+        }
+        if (!endDate.isEmpty()) {
+            params.put("endDate", endDate);
+        }
+        params.put("pageNum", "1");
+        params.put("pageSize", "20");
         
         Toast.makeText(this, "正在查询...", Toast.LENGTH_SHORT).show();
         
@@ -122,17 +135,14 @@ public class TaskManageActivity extends Activity {
             @Override
             public void run() {
                 try {
-                    List<Task> result = apiService.queryTasks(
-                        finalStartDate,
-                        finalEndDate
-                    );
+                    PageResponse<Task> pageResponse = wmsApiService.queryTasks(params, TaskManageActivity.this);
                     
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
                             taskList.clear();
-                            if (result != null) {
-                                taskList.addAll(result);
+                            if (pageResponse != null && pageResponse.getList() != null) {
+                                taskList.addAll(pageResponse.getList());
                             }
                             adapter.notifyDataSetChanged();
                             
@@ -172,7 +182,7 @@ public class TaskManageActivity extends Activity {
         
         new AlertDialog.Builder(this)
             .setTitle("确认取消任务")
-            .setMessage("任务编号：" + selectedTask.getTaskNo() + "\n任务类型：" + selectedTask.getTaskTypeDisplay())
+            .setMessage("任务编号：" + selectedTask.getOutID() + "\n任务类型：" + selectedTask.getTaskTypeDisplay())
             .setPositiveButton("确认", new android.content.DialogInterface.OnClickListener() {
                 @Override
                 public void onClick(android.content.DialogInterface dialog, int which) {
@@ -193,7 +203,9 @@ public class TaskManageActivity extends Activity {
             @Override
             public void run() {
                 try {
-                    boolean success = apiService.cancelTask(selectedTask.getTaskNo());
+                    String outID = selectedTask.getOutID();
+                    String operator = PreferenceUtil.getUserName(TaskManageActivity.this);
+                    boolean success = agvApiService.cancelTask(outID, operator, TaskManageActivity.this);
                     
                     runOnUiThread(new Runnable() {
                         @Override
@@ -275,7 +287,7 @@ public class TaskManageActivity extends Activity {
             
             void bind(Task task, int position) {
                 cbSelected.setChecked(selectedTask == task);
-                tvTaskNo.setText("任务编号：" + task.getTaskNo());
+                tvTaskNo.setText("任务编号：" + task.getOutID());
                 tvTaskType.setText("任务类型：" + task.getTaskTypeDisplay());
                 tvTaskStatus.setText("状态：" + task.getStatusDisplay());
                 tvTaskTime.setText("创建时间：" + task.getCreateTime());
@@ -284,9 +296,9 @@ public class TaskManageActivity extends Activity {
                 if (task.getPalletNo() != null && !task.getPalletNo().isEmpty()) {
                     info += "托盘：" + task.getPalletNo();
                 }
-                if (task.getLocationCode() != null && !task.getLocationCode().isEmpty()) {
+                if (task.getBinCode() != null && !task.getBinCode().isEmpty()) {
                     if (!info.isEmpty()) info += "  ";
-                    info += "库位：" + task.getLocationCode();
+                    info += "库位：" + task.getBinCode();
                 }
                 tvTaskInfo.setText(info);
             }

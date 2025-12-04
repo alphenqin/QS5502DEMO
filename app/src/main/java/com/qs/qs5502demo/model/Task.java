@@ -18,13 +18,16 @@ public class Task implements Serializable {
     public static final String STATUS_CANCELLED = "CANCELLED";        // 已取消
     public static final String STATUS_FAILED = "FAILED";              // 失败
 
-    private String taskNo;          // 任务编号，如 "R20250715145830999"
-    private String taskType;        // 任务类型
+    private String outID;           // 任务编号（AGV生成），如 "R20250715145830999"
+    private String taskNo;          // 任务编号（兼容旧字段）
+    private String taskType;        // 业务任务类型
     private String status;           // 任务状态
     private String createTime;       // 创建时间
     private String palletNo;         // 托盘号
     private String valveNo;          // 阀门编号
-    private String locationCode;     // 库位号
+    private String matCode;          // 物料编码
+    private String binCode;          // 库位号，与调度系统 binCode 一致
+    private String locationCode;     // 库位号（兼容旧字段）
 
     public Task() {
     }
@@ -36,12 +39,22 @@ public class Task implements Serializable {
         this.createTime = createTime;
     }
 
+    public String getOutID() {
+        return outID != null ? outID : taskNo;
+    }
+
+    public void setOutID(String outID) {
+        this.outID = outID;
+        this.taskNo = outID; // 兼容旧字段
+    }
+
     public String getTaskNo() {
-        return taskNo;
+        return taskNo != null ? taskNo : outID;
     }
 
     public void setTaskNo(String taskNo) {
         this.taskNo = taskNo;
+        this.outID = taskNo; // 同步更新
     }
 
     public String getTaskType() {
@@ -84,12 +97,30 @@ public class Task implements Serializable {
         this.valveNo = valveNo;
     }
 
+    public String getMatCode() {
+        return matCode;
+    }
+
+    public void setMatCode(String matCode) {
+        this.matCode = matCode;
+    }
+
+    public String getBinCode() {
+        return binCode != null ? binCode : locationCode;
+    }
+
+    public void setBinCode(String binCode) {
+        this.binCode = binCode;
+        this.locationCode = binCode; // 兼容旧字段
+    }
+
     public String getLocationCode() {
-        return locationCode;
+        return locationCode != null ? locationCode : binCode;
     }
 
     public void setLocationCode(String locationCode) {
         this.locationCode = locationCode;
+        this.binCode = locationCode; // 同步更新
     }
 
     /**
@@ -131,6 +162,13 @@ public class Task implements Serializable {
      */
     public boolean canCancel() {
         return STATUS_PENDING.equals(status);
+    }
+    
+    /**
+     * 获取任务编号（优先使用outID）
+     */
+    public String getTaskId() {
+        return outID != null ? outID : taskNo;
     }
 }
 

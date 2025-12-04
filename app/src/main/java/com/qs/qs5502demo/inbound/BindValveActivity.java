@@ -10,8 +10,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.qs.pda5502demo.R;
-import com.qs.qs5502demo.api.ApiClient;
-import com.qs.qs5502demo.api.ApiService;
+import com.qs.qs5502demo.api.WmsApiService;
 import com.qs.qs5502demo.model.Valve;
 import com.qs.qs5502demo.util.DateUtil;
 
@@ -26,21 +25,24 @@ public class BindValveActivity extends Activity {
     private Button btnSubmit;
     private Button btnCancel;
     
-    private ApiService apiService;
+    private WmsApiService wmsApiService;
     
     private String palletNo;
-    private String locationCode;
+    private String binCode;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_bind_valve);
         
-        apiService = new ApiClient();
+        wmsApiService = new WmsApiService(this);
         
         // 获取传入的参数
         palletNo = getIntent().getStringExtra("palletNo");
-        locationCode = getIntent().getStringExtra("locationCode");
+        binCode = getIntent().getStringExtra("binCode");
+        if (binCode == null) {
+            binCode = getIntent().getStringExtra("locationCode"); // 兼容旧字段
+        }
         
         if (palletNo == null || palletNo.isEmpty()) {
             Toast.makeText(this, "托盘号无效，请返回重新扫码", Toast.LENGTH_SHORT).show();
@@ -82,7 +84,7 @@ public class BindValveActivity extends Activity {
     
     private void loadData() {
         tvPalletNoReadonly.setText(palletNo);
-        tvLocationCodeReadonly.setText(locationCode);
+        tvLocationCodeReadonly.setText(binCode);
         
         // 默认入库日期为今天
         etInboundDate.setText(DateUtil.getCurrentDate());
@@ -129,7 +131,9 @@ public class BindValveActivity extends Activity {
         valve.setVendorName(vendorName);
         valve.setInboundDate(inboundDate);
         valve.setPalletNo(palletNo);
-        valve.setLocationCode(locationCode);
+        valve.setBinCode(binCode);
+        // 生成物料编码（可以根据实际规则生成，这里简单处理）
+        valve.setMatCode("MAT-" + valveModel + "-" + valveNo);
         
         // 显示加载提示
         Toast.makeText(this, "正在绑定...", Toast.LENGTH_SHORT).show();
@@ -139,7 +143,7 @@ public class BindValveActivity extends Activity {
             @Override
             public void run() {
                 try {
-                    boolean success = apiService.bindValve(valve);
+                    boolean success = wmsApiService.bindValve(valve, BindValveActivity.this);
                     
                     // 更新UI
                     runOnUiThread(new Runnable() {
@@ -147,7 +151,10 @@ public class BindValveActivity extends Activity {
                         public void run() {
                             if (success) {
                                 Toast.makeText(BindValveActivity.this, "绑定成功", Toast.LENGTH_SHORT).show();
-                                setResult(RESULT_OK);
+                                // 返回物料编码
+                                android.content.Intent resultIntent = new android.content.Intent();
+                                resultIntent.putExtra("matCode", valve.getMatCode());
+                                setResult(RESULT_OK, resultIntent);
                                 finish();
                             } else {
                                 Toast.makeText(BindValveActivity.this, "绑定失败", Toast.LENGTH_SHORT).show();

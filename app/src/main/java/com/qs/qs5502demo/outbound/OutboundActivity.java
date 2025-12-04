@@ -11,11 +11,14 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.qs.pda5502demo.R;
-import com.qs.qs5502demo.api.ApiClient;
-import com.qs.qs5502demo.api.ApiService;
-import com.qs.qs5502demo.model.Task;
+import com.qs.qs5502demo.api.AgvApiService;
+import com.qs.qs5502demo.model.TaskResponse;
 import com.qs.qs5502demo.model.Valve;
 import com.qs.qs5502demo.send.SelectValveActivity;
+import com.qs.qs5502demo.util.PreferenceUtil;
+
+import java.util.HashMap;
+import java.util.Map;
 
 public class OutboundActivity extends Activity {
     
@@ -28,10 +31,12 @@ public class OutboundActivity extends Activity {
     private Button btnEmptyPalletReturn2;
     private Button btnBack;
     
-    private ApiService apiService;
+    private AgvApiService agvApiService;
     
     private String palletNo;
-    private String locationCode;
+    private String binCode;
+    private String matCode;
+    private String swapStation = "WAREHOUSE_SWAP_1"; // 置换区站点
     private Valve selectedValve;
 
     @Override
@@ -39,7 +44,7 @@ public class OutboundActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_outbound);
         
-        apiService = new ApiClient();
+        agvApiService = new AgvApiService();
         
         initViews();
         setupListeners();
@@ -111,7 +116,7 @@ public class OutboundActivity extends Activity {
             .setTitle("确认呼叫出库")
             .setMessage("阀门编号：" + selectedValve.getValveNo() + 
                        "\n托盘号：" + palletNo + 
-                       "\n库位号：" + locationCode)
+                       "\n库位号：" + binCode)
             .setPositiveButton("确认", new android.content.DialogInterface.OnClickListener() {
                 @Override
                 public void onClick(android.content.DialogInterface dialog, int which) {
@@ -132,22 +137,24 @@ public class OutboundActivity extends Activity {
             @Override
             public void run() {
                 try {
-                    Task task = apiService.createTask(
-                        Task.TYPE_OUTBOUND,
-                        palletNo,
-                        locationCode,
-                        "WAREHOUSE_LOCATION_" + locationCode.replace("-", "_"),
-                        "WAREHOUSE_SWAP_1",
-                        selectedValve.getValveNo()
-                    );
+                    // 构建请求参数
+                    Map<String, String> params = new HashMap<>();
+                    params.put("palletNo", palletNo);
+                    params.put("binCode", binCode);
+                    params.put("matCode", matCode);
+                    params.put("swapStation", swapStation);
+                    params.put("operator", PreferenceUtil.getUserName(OutboundActivity.this));
+                    
+                    // 调用AGV接口创建出库任务
+                    TaskResponse response = agvApiService.callOutbound(params, OutboundActivity.this);
                     
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            if (task != null && task.getTaskNo() != null) {
+                            if (response != null && response.getOutID() != null) {
                                 updateStatus(true);
                                 Toast.makeText(OutboundActivity.this, 
-                                    "呼叫出库成功，任务号：" + task.getTaskNo(), 
+                                    "呼叫出库成功，任务号：" + response.getOutID(), 
                                     Toast.LENGTH_LONG).show();
                             } else {
                                 Toast.makeText(OutboundActivity.this, "呼叫出库失败", Toast.LENGTH_SHORT).show();
@@ -171,14 +178,14 @@ public class OutboundActivity extends Activity {
      * 空托回库
      */
     private void callEmptyPalletReturn(String palletType) {
-        if (locationCode == null || locationCode.isEmpty()) {
+        if (binCode == null || binCode.isEmpty()) {
             Toast.makeText(this, "请先选择阀门", Toast.LENGTH_SHORT).show();
             return;
         }
         
         new AlertDialog.Builder(this)
             .setTitle("确认空托回库")
-            .setMessage("将" + palletType + "#空托盘送回库位：" + locationCode)
+            .setMessage("将" + palletType + "#空托盘送回库位：" + binCode)
             .setPositiveButton("确认", new android.content.DialogInterface.OnClickListener() {
                 @Override
                 public void onClick(android.content.DialogInterface dialog, int which) {
@@ -199,21 +206,22 @@ public class OutboundActivity extends Activity {
             @Override
             public void run() {
                 try {
-                    Task task = apiService.createTask(
-                        Task.TYPE_RETURN,
-                        palletNo,
-                        locationCode,
-                        "WAREHOUSE_SWAP_1",
-                        "WAREHOUSE_LOCATION_" + locationCode.replace("-", "_"),
-                        null
-                    );
+                    // 构建请求参数
+                    Map<String, String> params = new HashMap<>();
+                    params.put("palletNo", palletNo);
+                    params.put("binCode", binCode);
+                    params.put("swapStation", swapStation);
+                    params.put("operator", PreferenceUtil.getUserName(OutboundActivity.this));
+                    
+                    // 调用AGV接口创建空托回库任务
+                    TaskResponse response = agvApiService.returnPalletFromSwap(params, OutboundActivity.this);
                     
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            if (task != null && task.getTaskNo() != null) {
+                            if (response != null && response.getOutID() != null) {
                                 Toast.makeText(OutboundActivity.this, 
-                                    "空托回库成功，任务号：" + task.getTaskNo(), 
+                                    "空托回库成功，任务号：" + response.getOutID(), 
                                     Toast.LENGTH_LONG).show();
                             } else {
                                 Toast.makeText(OutboundActivity.this, "空托回库失败", Toast.LENGTH_SHORT).show();
@@ -252,10 +260,11 @@ public class OutboundActivity extends Activity {
             selectedValve = (Valve) data.getSerializableExtra("valve");
             if (selectedValve != null) {
                 palletNo = selectedValve.getPalletNo();
-                locationCode = selectedValve.getLocationCode();
+                binCode = selectedValve.getBinCode();
+                matCode = selectedValve.getMatCode();
                 
                 tvPalletNo.setText(palletNo);
-                tvLocationCode.setText(locationCode);
+                tvLocationCode.setText(binCode);
                 updateStatus(true);
             }
         }

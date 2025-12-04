@@ -15,6 +15,7 @@ import com.qs.qs5502demo.returnwarehouse.ReturnWarehouseActivity;
 import com.qs.qs5502demo.send.SendInspectionActivity;
 import com.qs.qs5502demo.task.TaskManageActivity;
 import com.qs.qs5502demo.util.DateUtil;
+import com.qs.qs5502demo.util.PreferenceUtil;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -30,10 +31,26 @@ public class MainActivity extends Activity {
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
+		
+		// 检查是否已登录
+		String token = PreferenceUtil.getToken(this);
+		if (token == null || token.isEmpty()) {
+			// 未登录，跳转到登录页面
+			startActivity(new Intent(this, com.qs.qs5502demo.LoginActivity.class));
+			finish();
+			return;
+		}
+		
 		setContentView(R.layout.activity_main);
 		
 		tvDateTime = (TextView) findViewById(R.id.tvDateTime);
 		tvUserInfo = (TextView) findViewById(R.id.tvUserInfo);
+		
+		// 显示用户名
+		String userName = PreferenceUtil.getUserName(this);
+		if (userName != null && !userName.isEmpty()) {
+			tvUserInfo.setText(userName);
+		}
 		
 		// 初始化按钮点击事件
 		findViewById(R.id.btnInbound).setOnClickListener(new OnClickListener() {
